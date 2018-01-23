@@ -1,6 +1,5 @@
-from __future__ import unicode_literals
-
 from datetime import datetime, timedelta
+from decimal import Decimal
 from unittest import skipIf, skipUnless
 
 from django.db import connection
@@ -13,16 +12,12 @@ from django.db.models.functions import (
 from django.test import TestCase, skipIfDBFeature, skipUnlessDBFeature
 from django.utils import timezone
 
-from .models import Article, Author, Fan
+from .models import Article, Author, DecimalModel, Fan
 
 
 lorem_ipsum = """
     Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
     tempor incididunt ut labore et dolore magna aliqua."""
-
-
-def truncate_microseconds(value):
-    return value if connection.features.supports_microsecond_precision else value.replace(microsecond=0)
 
 
 class FunctionTests(TestCase):
@@ -122,7 +117,7 @@ class FunctionTests(TestCase):
         articles = Article.objects.annotate(
             last_updated=Greatest('written', 'published'),
         )
-        self.assertEqual(articles.first().last_updated, truncate_microseconds(now))
+        self.assertEqual(articles.first().last_updated, now)
 
     @skipUnlessDBFeature('greatest_least_ignores_nulls')
     def test_greatest_ignores_null(self):
@@ -175,7 +170,7 @@ class FunctionTests(TestCase):
                 Coalesce('published', past_sql),
             ),
         )
-        self.assertEqual(articles.first().last_updated, truncate_microseconds(now))
+        self.assertEqual(articles.first().last_updated, now)
 
     def test_greatest_all_null(self):
         Article.objects.create(title="Testing with Django", written=timezone.now())
@@ -204,6 +199,15 @@ class FunctionTests(TestCase):
         author.refresh_from_db()
         self.assertEqual(author.alias, 'Jim')
 
+    def test_greatest_decimal_filter(self):
+        obj = DecimalModel.objects.create(n1=Decimal('1.1'), n2=Decimal('1.2'))
+        self.assertCountEqual(
+            DecimalModel.objects.annotate(
+                greatest=Greatest('n1', 'n2'),
+            ).filter(greatest=Decimal('1.2')),
+            [obj],
+        )
+
     def test_least(self):
         now = timezone.now()
         before = now - timedelta(hours=1)
@@ -217,7 +221,7 @@ class FunctionTests(TestCase):
         articles = Article.objects.annotate(
             first_updated=Least('written', 'published'),
         )
-        self.assertEqual(articles.first().first_updated, truncate_microseconds(before))
+        self.assertEqual(articles.first().first_updated, before)
 
     @skipUnlessDBFeature('greatest_least_ignores_nulls')
     def test_least_ignores_null(self):
@@ -270,7 +274,7 @@ class FunctionTests(TestCase):
                 Coalesce('published', future_sql),
             ),
         )
-        self.assertEqual(articles.first().last_updated, truncate_microseconds(now))
+        self.assertEqual(articles.first().last_updated, now)
 
     def test_least_all_null(self):
         Article.objects.create(title="Testing with Django", written=timezone.now())
@@ -298,6 +302,15 @@ class FunctionTests(TestCase):
 
         author.refresh_from_db()
         self.assertEqual(author.alias, 'James Smith')
+
+    def test_least_decimal_filter(self):
+        obj = DecimalModel.objects.create(n1=Decimal('1.1'), n2=Decimal('1.2'))
+        self.assertCountEqual(
+            DecimalModel.objects.annotate(
+                least=Least('n1', 'n2'),
+            ).filter(least=Decimal('1.1')),
+            [obj],
+        )
 
     def test_concat(self):
         Author.objects.create(name='Jayden')

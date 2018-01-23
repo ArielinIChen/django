@@ -33,6 +33,14 @@ the new Django version(s):
 Pay particular attention to backwards incompatible changes to get a clear idea
 of what will be needed for a successful upgrade.
 
+If you're upgrading through more than one feature version (e.g. A.B to A.B+2),
+it's usually easier to upgrade through each feature release incrementally
+(A.B to A.B+1 to A.B+2) rather than to make all the changes for each feature
+release at once. For each feature release, use the latest patch release (A.B.C).
+
+The same incremental upgrade approach is recommended when upgrading from one
+LTS to the next.
+
 Dependencies
 ============
 
@@ -54,7 +62,7 @@ In Python, deprecation warnings are silenced by default. You must turn them on
 using the ``-Wall`` Python command line option or the :envvar:`PYTHONWARNINGS`
 environment variable. For example, to show warnings while running tests:
 
-.. code-block:: console
+.. console::
 
     $ python -Wall manage.py test
 
@@ -84,7 +92,7 @@ might want to set up a new environment with all the dependencies first.
 Exactly which steps you will need to take depends on your installation process.
 The most convenient way is to use pip_ with the ``--upgrade`` or ``-U`` flag:
 
-.. code-block:: console
+.. console::
 
    $ pip install -U Django
 
@@ -95,7 +103,7 @@ If you use some other installation process, you might have to manually
 should look at the complete installation instructions.
 
 .. _pip: https://pip.pypa.io/
-.. _virtualenv: http://www.virtualenv.org/
+.. _virtualenv: https://virtualenv.pypa.io/
 
 Testing
 =======
@@ -105,7 +113,7 @@ When the new environment is set up, :doc:`run the full test suite
 on deprecation warnings on so they're shown in the test output (you can also
 use the flag if you test your app manually using ``manage.py runserver``):
 
-.. code-block:: console
+.. console::
 
     $ python -Wall manage.py test
 

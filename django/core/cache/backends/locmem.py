@@ -1,16 +1,10 @@
 "Thread-safe in-memory cache backend."
-
+import pickle
 import time
 from contextlib import contextmanager
 
 from django.core.cache.backends.base import DEFAULT_TIMEOUT, BaseCache
 from django.utils.synch import RWLock
-
-try:
-    from django.utils.six.moves import cPickle as pickle
-except ImportError:
-    import pickle
-
 
 # Global in-memory store of cache data. Keyed by name, to provide
 # multiple named local memory caches.
@@ -27,7 +21,7 @@ def dummy():
 
 class LocMemCache(BaseCache):
     def __init__(self, name, params):
-        BaseCache.__init__(self, params)
+        super().__init__(params)
         self._cache = _caches.setdefault(name, {})
         self._expire_info = _expire_info.setdefault(name, {})
         self._lock = _locks.setdefault(name, RWLock())
@@ -104,9 +98,7 @@ class LocMemCache(BaseCache):
 
     def _has_expired(self, key):
         exp = self._expire_info.get(key, -1)
-        if exp is None or exp > time.time():
-            return False
-        return True
+        return exp is not None and exp <= time.time()
 
     def _cull(self):
         if self._cull_frequency == 0:

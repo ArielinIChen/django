@@ -1,5 +1,3 @@
-from __future__ import unicode_literals
-
 from django.core import serializers
 from django.db import connection
 from django.test import TestCase
@@ -12,7 +10,7 @@ class NaturalKeySerializerTests(TestCase):
     pass
 
 
-def natural_key_serializer_test(format, self):
+def natural_key_serializer_test(self, format):
     # Create all the objects defined in the test data
     with connection.constraint_checks_disabled():
         objects = [
@@ -38,7 +36,7 @@ def natural_key_serializer_test(format, self):
         )
 
 
-def natural_key_test(format, self):
+def natural_key_test(self, format):
     book1 = {
         'data': '978-1590597255',
         'title': 'The Definitive Guide to Django: Web Development Done Right',

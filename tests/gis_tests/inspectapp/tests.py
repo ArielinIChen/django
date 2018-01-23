@@ -1,26 +1,19 @@
-from __future__ import unicode_literals
-
 import os
 import re
+from io import StringIO
 
-from django.contrib.gis.gdal import HAS_GDAL
+from django.contrib.gis.gdal import GDAL_VERSION, Driver, GDALException
+from django.contrib.gis.utils.ogrinspect import ogrinspect
 from django.core.management import call_command
 from django.db import connection, connections
 from django.test import TestCase, skipUnlessDBFeature
 from django.test.utils import modify_settings
-from django.utils.six import StringIO
 
 from ..test_data import TEST_DATA
 from ..utils import postgis
-
-if HAS_GDAL:
-    from django.contrib.gis.gdal import Driver, GDALException, GDAL_VERSION
-    from django.contrib.gis.utils.ogrinspect import ogrinspect
-
-    from .models import AllOGRFields
+from .models import AllOGRFields
 
 
-@skipUnlessDBFeature("gis_enabled")
 class InspectDbTests(TestCase):
     def test_geom_columns(self):
         """
@@ -63,7 +56,6 @@ class InspectDbTests(TestCase):
             self.assertIn('poly = models.GeometryField(', output)
 
 
-@skipUnlessDBFeature("gis_enabled")
 @modify_settings(
     INSTALLED_APPS={'append': 'django.contrib.gis'},
 )
@@ -77,6 +69,7 @@ class OGRInspectTest(TestCase):
         expected = [
             '# This is an auto-generated Django model module created by ogrinspect.',
             'from django.contrib.gis.db import models',
+            '',
             '',
             'class MyModel(models.Model):',
             '    float = models.FloatField()',
@@ -103,6 +96,7 @@ class OGRInspectTest(TestCase):
         expected = [
             '# This is an auto-generated Django model module created by ogrinspect.',
             'from django.contrib.gis.db import models',
+            '',
             '',
             'class City(models.Model):',
             '    name = models.CharField(max_length=80)',
@@ -134,6 +128,7 @@ class OGRInspectTest(TestCase):
             '# This is an auto-generated Django model module created by ogrinspect.\n'
             'from django.contrib.gis.db import models\n'
             '\n'
+            '\n'
             'class Measurement(models.Model):\n'
         ))
 
@@ -155,6 +150,24 @@ class OGRInspectTest(TestCase):
         call_command('ogrinspect', shp_file, 'City', stdout=out)
         output = out.getvalue()
         self.assertIn('class City(models.Model):', output)
+
+    def test_mapping_option(self):
+        expected = (
+            "    geom = models.PointField(srid=-1)\n"
+            "\n"
+            "\n"
+            "# Auto-generated `LayerMapping` dictionary for City model\n"
+            "city_mapping = {\n"
+            "    'name': 'Name',\n"
+            "    'population': 'Population',\n"
+            "    'density': 'Density',\n"
+            "    'created': 'Created',\n"
+            "    'geom': 'POINT',\n"
+            "}\n")
+        shp_file = os.path.join(TEST_DATA, 'cities', 'cities.shp')
+        out = StringIO()
+        call_command('ogrinspect', shp_file, '--mapping', 'City', stdout=out)
+        self.assertIn(expected, out.getvalue())
 
 
 def get_ogr_db_string():
@@ -187,7 +200,7 @@ def get_ogr_db_string():
     except GDALException:
         return None
 
-    # SQLite/Spatialite in-memory databases
+    # SQLite/SpatiaLite in-memory databases
     if db['NAME'] == ":memory:":
         return None
 

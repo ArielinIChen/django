@@ -1,7 +1,6 @@
-from __future__ import unicode_literals
-
 from django.forms import (
-    CharField, PasswordInput, Textarea, TextInput, ValidationError,
+    CharField, HiddenInput, PasswordInput, Textarea, TextInput,
+    ValidationError,
 )
 from django.test import SimpleTestCase
 
@@ -74,12 +73,15 @@ class CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
             CharField(min_length='a')
         with self.assertRaises(ValueError):
             CharField(max_length='a')
-        with self.assertRaises(ValueError):
+        msg = '__init__() takes 1 positional argument but 2 were given'
+        with self.assertRaisesMessage(TypeError, msg):
             CharField('a')
 
     def test_charfield_widget_attrs(self):
         """
-        CharField.widget_attrs() always returns a dictionary (#15912).
+        CharField.widget_attrs() always returns a dictionary and includes
+        minlength/maxlength if min_length/max_length are defined on the field
+        and the widget is not hidden.
         """
         # Return an empty dictionary if max_length and min_length are both None.
         f = CharField()
@@ -104,6 +106,7 @@ class CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         self.assertEqual(f.widget_attrs(TextInput()), {'maxlength': '10', 'minlength': '5'})
         self.assertEqual(f.widget_attrs(PasswordInput()), {'maxlength': '10', 'minlength': '5'})
         self.assertEqual(f.widget_attrs(Textarea()), {'maxlength': '10', 'minlength': '5'})
+        self.assertEqual(f.widget_attrs(HiddenInput()), {})
 
     def test_charfield_strip(self):
         """
@@ -117,6 +120,35 @@ class CharFieldTest(FormFieldAssertionsMixin, SimpleTestCase):
         self.assertEqual(f.clean(' 1'), ' 1')
         self.assertEqual(f.clean('1 '), '1 ')
 
+    def test_strip_before_checking_empty(self):
+        """
+        A whitespace-only value, ' ', is stripped to an empty string and then
+        converted to the empty value, None.
+        """
+        f = CharField(required=False, empty_value=None)
+        self.assertIsNone(f.clean(' '))
+
+    def test_clean_non_string(self):
+        """CharField.clean() calls str(value) before stripping it."""
+        class StringWrapper:
+            def __init__(self, v):
+                self.v = v
+
+            def __str__(self):
+                return self.v
+
+        value = StringWrapper(' ')
+        f1 = CharField(required=False, empty_value=None)
+        self.assertIsNone(f1.clean(value))
+        f2 = CharField(strip=False)
+        self.assertEqual(f2.clean(value), ' ')
+
     def test_charfield_disabled(self):
         f = CharField(disabled=True)
-        self.assertWidgetRendersTo(f, '<input type="text" name="f" id="id_f" disabled required />')
+        self.assertWidgetRendersTo(f, '<input type="text" name="f" id="id_f" disabled required>')
+
+    def test_null_characters_prohibited(self):
+        f = CharField()
+        msg = 'Null characters are not allowed.'
+        with self.assertRaisesMessage(ValidationError, msg):
+            f.clean('\x00something')

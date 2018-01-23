@@ -10,7 +10,7 @@ import contextlib
 import threading
 
 
-class RWLock(object):
+class RWLock:
     """
     Classic implementation of reader-writer lock with preference to writers.
 
@@ -60,7 +60,7 @@ class RWLock(object):
     def writer_enters(self):
         with self.mutex:
             if self.active_writers == 0 and self.waiting_writers == 0 and self.active_readers == 0:
-                self.active_writers += 1
+                self.active_writers = 1
                 self.can_write.release()
             else:
                 self.waiting_writers += 1

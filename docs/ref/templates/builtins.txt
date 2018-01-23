@@ -185,6 +185,9 @@ call to ``{% cycle %}`` doesn't specify ``silent``::
     {% cycle 'row1' 'row2' as rowcolors silent %}
     {% cycle rowcolors %}
 
+You can use the :ttag:`resetcycle` tag to make a ``{% cycle %}`` tag restart
+from its first value when it's next encountered.
+
 .. templatetag:: debug
 
 ``debug``
@@ -212,8 +215,9 @@ This tag can be used in two ways:
 
 See :ref:`template-inheritance` for more information.
 
-A string argument may be a relative path starting with ``./`` or ``../``. For
-example, assume the following directory structure::
+Normally the template name is relative to the template loader's root directory.
+A string argument may also be a relative path starting with ``./`` or ``../``.
+For example, assume the following directory structure::
 
     dir1/
         template.html
@@ -227,10 +231,6 @@ In ``template.html``, the following paths would be valid::
     {% extends "./base2.html" %}
     {% extends "../base1.html" %}
     {% extends "./my/base3.html" %}
-
-.. versionadded:: 1.10
-
-   The ability to use relative paths was added.
 
 .. templatetag:: filter
 
@@ -535,8 +535,6 @@ Not contained within. This is the negation of the ``in`` operator.
 ``is`` operator
 ^^^^^^^^^^^^^^^
 
-.. versionadded:: 1.10
-
 Object identity. Tests if two values are the same object. Example::
 
     {% if somevar is True %}
@@ -549,8 +547,6 @@ Object identity. Tests if two values are the same object. Example::
 
 ``is not`` operator
 ^^^^^^^^^^^^^^^^^^^
-
-.. versionadded:: 1.10
 
 Negated object identity. Tests if two values are not the same object. This is
 the negation of the ``is`` operator. Example::
@@ -679,12 +675,9 @@ This example includes the contents of the template ``"foo/bar.html"``::
 
     {% include "foo/bar.html" %}
 
-A string argument may be a relative path starting with ``./`` or ``../`` as
-described in the :ttag:`extends` tag.
-
-.. versionadded:: 1.10
-
-   The ability to use a relative path was added.
+Normally the template name is relative to the template loader's root directory.
+A string argument may also be a relative path starting with ``./`` or ``../``
+as described in the :ttag:`extends` tag.
 
 This example includes the contents of the template whose name is contained in
 the variable ``template_name``::
@@ -717,16 +710,6 @@ no variables at all), use the ``only`` option. No other variables are
 available to the included template::
 
     {% include "name_snippet.html" with greeting="Hi" only %}
-
-If the included template causes an exception while it's rendered (including
-if it's missing or has syntax errors), the behavior varies depending on the
-:class:`template engine's <django.template.Engine>` ``debug`` option (if not
-set, this option defaults to the value of :setting:`DEBUG`). When debug mode is
-turned on, an exception like :exc:`~django.template.TemplateDoesNotExist` or
-:exc:`~django.template.TemplateSyntaxError` will be raised. When debug mode
-is turned off, ``{% include %}`` logs a warning to the ``django.template``
-logger with the exception that happens while rendering the included template
-and returns an empty string.
 
 .. note::
     The :ttag:`include` tag should be considered as an implementation of
@@ -842,8 +825,8 @@ output (as a string) inside a variable. This is useful if you want to use
 
 Regroups a list of alike objects by a common attribute.
 
-This complex tag is best illustrated by way of an example: say that "places" is
-a list of cities represented by dictionaries containing ``"name"``,
+This complex tag is best illustrated by way of an example: say that ``cities``
+is a list of cities represented by dictionaries containing ``"name"``,
 ``"population"``, and ``"country"`` keys:
 
 .. code-block:: python
@@ -882,8 +865,8 @@ The following snippet of template code would accomplish this::
     {% for country in country_list %}
         <li>{{ country.grouper }}
         <ul>
-            {% for item in country.list %}
-              <li>{{ item.name }}: {{ item.population }}</li>
+            {% for city in country.list %}
+              <li>{{ city.name }}: {{ city.population }}</li>
             {% endfor %}
         </ul>
         </li>
@@ -896,12 +879,30 @@ resulting list. Here, we're regrouping the ``cities`` list by the ``country``
 attribute and calling the result ``country_list``.
 
 ``{% regroup %}`` produces a list (in this case, ``country_list``) of
-**group objects**. Each group object has two attributes:
+**group objects**. Group objects are instances of
+:py:func:`~collections.namedtuple` with two fields:
 
 * ``grouper`` -- the item that was grouped by (e.g., the string "India" or
   "Japan").
 * ``list`` -- a list of all items in this group (e.g., a list of all cities
   with country='India').
+
+Because ``{% regroup %}`` produces :py:func:`~collections.namedtuple` objects,
+you can also write the previous example as::
+
+    {% regroup cities by country as country_list %}
+
+    <ul>
+    {% for country, local_cities in country_list %}
+        <li>{{ country }}
+        <ul>
+            {% for city in local_cities %}
+              <li>{{ city.name }}: {{ city.population }}</li>
+            {% endfor %}
+        </ul>
+        </li>
+    {% endfor %}
+    </ul>
 
 Note that ``{% regroup %}`` does not order its input! Our example relies on
 the fact that the ``cities`` list was ordered by ``country`` in the first place.
@@ -970,6 +971,55 @@ attribute, allowing  you to group on the display string rather than the
 
 ``{{ country.grouper }}`` will now display the value fields from the
 ``choices`` set rather than the keys.
+
+.. templatetag:: resetcycle
+
+``resetcycle``
+--------------
+
+Resets a previous `cycle`_ so that it restarts from its first item at its next
+encounter. Without arguments, ``{% resetcycle %}`` will reset the last
+``{% cycle %}`` defined in the template.
+
+Example usage::
+
+    {% for coach in coach_list %}
+        <h1>{{ coach.name }}</h1>
+        {% for athlete in coach.athlete_set.all %}
+            <p class="{% cycle 'odd' 'even' %}">{{ athlete.name }}</p>
+        {% endfor %}
+        {% resetcycle %}
+    {% endfor %}
+
+This example would return this HTML::
+
+    <h1>José Mourinho</h1>
+    <p class="odd">Thibaut Courtois</p>
+    <p class="even">John Terry</p>
+    <p class="odd">Eden Hazard</p>
+
+    <h1>Carlo Ancelotti</h1>
+    <p class="odd">Manuel Neuer</p>
+    <p class="even">Thomas Müller</p>
+
+Notice how the first block ends with ``class="odd"`` and the new one starts
+with ``class="odd"``. Without the ``{% resetcycle %}`` tag, the second block
+would start with ``class="even"``.
+
+You can also reset named cycle tags::
+
+    {% for item in list %}
+        <p class="{% cycle 'odd' 'even' as stripe %} {% cycle 'major' 'minor' 'minor' 'minor' 'minor' as tick %}">
+            {{ item.data }}
+        </p>
+        {% ifchanged item.category %}
+            <h1>{{ item.category }}</h1>
+            {% if not forloop.first %}{% resetcycle tick %}{% endif %}
+        {% endifchanged %}
+    {% endfor %}
+
+In this example, we have both the alternating odd/even rows and a "major" row
+every fifth row. Only the five-row cycle is reset when a category changes.
 
 .. templatetag:: spaceless
 
@@ -1043,11 +1093,11 @@ hard-code URLs in your templates::
 
     {% url 'some-url-name' v1 v2 %}
 
-The first argument is a :func:`~django.conf.urls.url` ``name``. It can be a
-quoted literal or any other context variable. Additional arguments are optional
-and should be space-separated values that will be used as arguments in the URL.
-The example above shows passing positional arguments. Alternatively you may
-use keyword syntax::
+The first argument is a :ref:`URL pattern name <naming-url-patterns>`. It can
+be a quoted literal or any other context variable. Additional arguments are
+optional and should be space-separated values that will be used as arguments in
+the URL. The example above shows passing positional arguments. Alternatively
+you may use keyword syntax::
 
     {% url 'some-url-name' arg1=v1 arg2=v2 %}
 
@@ -1060,14 +1110,14 @@ takes a client ID (here, ``client()`` is a method inside the views file
 
 .. code-block:: python
 
-    ('^client/([0-9]+)/$', app_views.client, name='app-views-client')
+    path('client/<int:id>/', app_views.client, name='app-views-client')
 
 If this app's URLconf is included into the project's URLconf under a path
 such as this:
 
 .. code-block:: python
 
-    ('^clients/', include('project_name.app_name.urls'))
+    path('clients/', include('project_name.app_name.urls'))
 
 ...then, in a template, you can create a link to this view like this::
 
@@ -1107,8 +1157,8 @@ by the context as to the current application.
 
 .. warning::
 
-    Don't forget to put quotes around the :func:`~django.conf.urls.url`
-    ``name``, otherwise the value will be interpreted as a context variable!
+    Don't forget to put quotes around the URL pattern ``name``, otherwise the
+    value will be interpreted as a context variable!
 
 .. templatetag:: verbatim
 
@@ -1142,7 +1192,7 @@ value to a maximum value, and then applies that ratio to a constant.
 For example::
 
     <img src="bar.png" alt="Bar"
-         height="10" width="{% widthratio this_value max_value max_width %}" />
+         height="10" width="{% widthratio this_value max_value max_width %}">
 
 If ``this_value`` is 175, ``max_value`` is 200, and ``max_width`` is 100, the
 image in the above example will be 88 pixels wide
@@ -1388,12 +1438,13 @@ for example, ``"es"``, then for::
 the output would be the string ``"09/01/2008"`` (the ``"SHORT_DATE_FORMAT"``
 format specifier for the ``es`` locale as shipped with Django is ``"d/m/Y"``).
 
-When used without a format string::
+When used without a format string, the ``DATE_FORMAT`` format specifier is
+used. Assuming the same settings as the previous example::
 
     {{ value|date }}
 
-...the formatting string defined in the :setting:`DATE_FORMAT` setting will be
-used, without applying any localization.
+outputs ``9 de Enero de 2008`` (the ``DATE_FORMAT`` format specifier for the
+``es`` locale is ``r'j \d\e F \d\e Y'``.
 
 You can combine ``date`` with the :tfilter:`time` filter to render a full
 representation of a ``datetime`` value. E.g.::
@@ -1429,7 +1480,7 @@ For example::
 
     {{ value|default_if_none:"nothing" }}
 
-If ``value`` is ``None``, the output will be the string ``"nothing"``.
+If ``value`` is ``None``, the output will be ``nothing``.
 
 .. templatefilter:: dictsort
 
@@ -1515,10 +1566,6 @@ produce empty output::
 
     {{ values|dictsort:"0" }}
 
-.. versionchanged:: 1.10
-
-    The ability to order a list of lists was added.
-
 .. templatefilter:: dictsortreversed
 
 ``dictsortreversed``
@@ -1554,11 +1601,6 @@ Escapes a string's HTML. Specifically, it makes these replacements:
 * ``"`` (double quote) is converted to ``&quot;``
 * ``&`` is converted to ``&amp;``
 
-The escaping is only applied when the string is output, so it does not matter
-where in a chained sequence of filters you put ``escape``: it will always be
-applied as though it were the last filter. If you want escaping to be applied
-immediately, use the :tfilter:`force_escape` filter.
-
 Applying ``escape`` to a variable that would normally have auto-escaping
 applied to the result will only result in one round of escaping being done. So
 it is safe to use this function even in auto-escaping environments. If you want
@@ -1569,12 +1611,6 @@ For example, you can apply ``escape`` to fields when :ttag:`autoescape` is off::
     {% autoescape off %}
         {{ title|escape }}
     {% endautoescape %}
-
-.. deprecated:: 1.10
-
-    The "lazy" behavior of the ``escape`` filter is deprecated. It will change
-    to immediately apply :func:`~django.utils.html.conditional_escape` in
-    Django 2.0.
 
 .. templatefilter:: escapejs
 
@@ -1796,14 +1832,14 @@ If ``value`` is ``['a', 'b', 'c', 'd']`` or ``"abcd"``, the output will be
 --------------
 
 Replaces line breaks in plain text with appropriate HTML; a single
-newline becomes an HTML line break (``<br />``) and a new line
+newline becomes an HTML line break (``<br>``) and a new line
 followed by a blank line becomes a paragraph break (``</p>``).
 
 For example::
 
     {{ value|linebreaks }}
 
-If ``value`` is ``Joel\nis a slug``, the output will be ``<p>Joel<br />is a
+If ``value`` is ``Joel\nis a slug``, the output will be ``<p>Joel<br>is a
 slug</p>``.
 
 .. templatefilter:: linebreaksbr
@@ -1812,13 +1848,13 @@ slug</p>``.
 ----------------
 
 Converts all newlines in a piece of plain text to HTML line breaks
-(``<br />``).
+(``<br>``).
 
 For example::
 
     {{ value|linebreaksbr }}
 
-If ``value`` is ``Joel\nis a slug``, the output will be ``Joel<br />is a
+If ``value`` is ``Joel\nis a slug``, the output will be ``Joel<br>is a
 slug``.
 
 .. templatefilter:: linenumbers
@@ -1879,8 +1915,7 @@ If ``value`` is ``Totally LOVING this Album!``, the output will be
 -------------
 
 Returns the value turned into a list. For a string, it's a list of characters.
-For an integer, the argument is cast into an unicode string before creating a
-list.
+For an integer, the argument is cast to a string before creating a list.
 
 For example::
 
@@ -2100,8 +2135,8 @@ for example, ``"de"``, then for::
 
     {{ value|time:"TIME_FORMAT" }}
 
-the output will be the string ``"01:23:00"`` (The ``"TIME_FORMAT"`` format
-specifier for the ``de`` locale as shipped with Django is ``"H:i:s"``).
+the output will be the string ``"01:23"`` (The ``"TIME_FORMAT"`` format
+specifier for the ``de`` locale as shipped with Django is ``"H:i"``).
 
 The ``time`` filter will only accept parameters in the format string that
 relate to the time of day, not the date (for obvious reasons). If you need to
@@ -2114,12 +2149,14 @@ attached timezone information (a :ref:`time-zone-aware
 accept the timezone-related :ref:`format specifiers
 <date-and-time-formatting-specifiers>` ``'e'``, ``'O'`` , ``'T'`` and ``'Z'``.
 
-When used without a format string::
+When used without a format string, the ``TIME_FORMAT`` format specifier is
+used::
 
     {{ value|time }}
 
-...the formatting string defined in the :setting:`TIME_FORMAT` setting will be
-used, without applying any localization.
+is the same as::
+
+    {{ value|time:"TIME_FORMAT" }}
 
 .. templatefilter:: timesince
 
@@ -2494,31 +2531,25 @@ app is installed, the tag will serve files using ``url()`` method of the
 storage specified by :setting:`STATICFILES_STORAGE`. For example::
 
     {% load static %}
-    <img src="{% static "images/hi.jpg" %}" alt="Hi!" />
+    <img src="{% static "images/hi.jpg" %}" alt="Hi!">
 
 It is also able to consume standard context variables, e.g. assuming a
 ``user_stylesheet`` variable is passed to the template::
 
     {% load static %}
-    <link rel="stylesheet" href="{% static user_stylesheet %}" type="text/css" media="screen" />
+    <link rel="stylesheet" href="{% static user_stylesheet %}" type="text/css" media="screen">
 
 If you'd like to retrieve a static URL without displaying it, you can use a
 slightly different call::
 
     {% load static %}
     {% static "images/hi.jpg" as myphoto %}
-    <img src="{{ myphoto }}"></img>
+    <img src="{{ myphoto }}">
 
 .. admonition:: Using Jinja2 templates?
 
     See :class:`~django.template.backends.jinja2.Jinja2` for information on
     using the ``static`` tag with Jinja2.
-
-.. versionchanged:: 1.10
-
-    In older versions, you had to use ``{% load static from staticfiles %}`` in
-    your template to serve files from the storage defined in
-    :setting:`STATICFILES_STORAGE`. This is no longer required.
 
 .. templatetag:: get_static_prefix
 
@@ -2530,7 +2561,7 @@ over exactly where and how :setting:`STATIC_URL` is injected into the template,
 you can use the :ttag:`get_static_prefix` template tag::
 
     {% load static %}
-    <img src="{% get_static_prefix %}images/hi.jpg" alt="Hi!" />
+    <img src="{% get_static_prefix %}images/hi.jpg" alt="Hi!">
 
 There's also a second form you can use to avoid extra processing if you need
 the value multiple times::
@@ -2538,8 +2569,8 @@ the value multiple times::
     {% load static %}
     {% get_static_prefix as STATIC_PREFIX %}
 
-    <img src="{{ STATIC_PREFIX }}images/hi.jpg" alt="Hi!" />
-    <img src="{{ STATIC_PREFIX }}images/hi2.jpg" alt="Hello!" />
+    <img src="{{ STATIC_PREFIX }}images/hi.jpg" alt="Hi!">
+    <img src="{{ STATIC_PREFIX }}images/hi2.jpg" alt="Hello!">
 
 .. templatetag:: get_media_prefix
 
